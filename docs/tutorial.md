@@ -1,36 +1,30 @@
-# Cadastro de Empregados com Java
+# Cadastro de Empregados com Java, JDBC e PostgreSQL
 
-Este tutorial conduz a criacao de um programa Java em camadas. A primeira versao usa uma lista em memoria. Depois, a camada de persistencia sera substituida por acesso a banco de dados com JDBC.
+Este tutorial apresenta um programa Java para cadastro de empregados usando interface por linha de comando e persistencia em banco de dados PostgreSQL com JDBC.
 
-## Objetivo da primeira versao
+O sistema permite:
 
-Nesta etapa, o sistema cadastra empregados em memoria. Para cada empregado, guardamos:
+- listar empregados cadastrados;
+- cadastrar um novo empregado;
+- validar os dados antes de salvar;
+- gravar e consultar os dados em uma tabela no PostgreSQL.
 
-- nome;
-- CPF;
-- salario.
+Ao final, tambem veremos como trocar a interface de linha de comando por uma interface grafica simples em Swing.
 
-A interface permite apenas:
+## Organizacao do projeto
 
-- inserir empregado;
-- listar empregados cadastrados.
-
-Ainda nao teremos edicao, exclusao ou banco de dados.
-
-## Camadas do projeto
-
-O programa foi separado em quatro partes:
+O projeto foi dividido em camadas para separar responsabilidades:
 
 - `modelo`: representa os dados do sistema.
-- `persistencia`: guarda e recupera os dados.
-- `aplicacao`: contem as regras do cadastro.
-- `ui`: contem a interface grafica em Swing.
+- `persistencia`: cuida da conexao e do acesso ao banco.
+- `aplicacao`: contem as regras de negocio.
+- `ui`: contem as interfaces do usuario.
 
-Essa divisao prepara o projeto para trocar a persistencia em memoria por JDBC sem reescrever a interface.
+Essa organizacao evita colocar tudo dentro da classe principal. A interface nao acessa o banco diretamente; ela conversa com a camada de aplicacao, que por sua vez usa a camada de persistencia.
 
-## Classe de modelo
+## Modelo de dados
 
-A classe `Empregado` representa um empregado:
+A classe `Empregado` representa um empregado do sistema:
 
 ```java
 public class Empregado {
@@ -40,11 +34,22 @@ public class Empregado {
 }
 ```
 
-O salario usa `BigDecimal`, que e uma escolha melhor para valores monetarios do que `double`.
+O salario usa `BigDecimal`, que e mais adequado para valores monetarios do que `double`.
 
-## Persistencia em memoria
+No banco de dados, criaremos uma tabela equivalente:
 
-A interface `EmpregadoRepository` define o que a aplicacao precisa da persistencia:
+```sql
+create table empregado (
+    id serial primary key,
+    nome varchar(100) not null,
+    cpf varchar(20) not null unique,
+    salario numeric(10, 2) not null
+);
+```
+
+## Interface de persistencia
+
+A interface `EmpregadoRepository` define as operacoes que a aplicacao precisa:
 
 ```java
 void inserir(Empregado empregado);
@@ -52,77 +57,13 @@ List<Empregado> listar();
 boolean existeCpf(String cpf);
 ```
 
-A classe `EmpregadoRepositoryMemoria` implementa essas operacoes usando um `ArrayList`.
+A camada de aplicacao depende dessa interface, e nao diretamente de uma classe concreta. Neste projeto, a implementacao usada e `EmpregadoRepositoryPostgres`, que salva e consulta os dados no PostgreSQL usando JDBC.
 
-## Regras da aplicacao
+## Configuracao do banco
 
-A classe `EmpregadoService` recebe os dados vindos da interface e aplica as regras:
+As informacoes de conexao nao ficam escritas diretamente no codigo. Elas devem ser colocadas em um arquivo local chamado `.env`, criado a partir do arquivo `.env.example`.
 
-- nome, CPF e salario sao obrigatorios;
-- salario nao pode ser negativo;
-- CPF nao pode ser duplicado;
-- salario precisa ser numerico.
-
-Somente depois dessas validacoes o empregado e enviado para a persistencia.
-
-## Interface Swing
-
-A classe `EmpregadoFrame` monta uma tela simples com:
-
-- campos para nome, CPF e salario;
-- botao Salvar;
-- tabela com todos os empregados cadastrados.
-
-A interface nao manipula diretamente o `ArrayList`. Ela chama a classe de aplicacao, que chama a persistencia.
-
-## Execucao
-
-Para obter exatamente esta versao do projeto, mesmo depois que o repositorio tiver novas versoes, use:
-
-```bash
-git clone https://github.com/victoriocarvalho/programaJavaBD.git
-cd programaJavaBD
-git checkout v1-arraylist
-```
-
-Compile e execute a classe principal:
-
-```bash
-javac -d target/classes src/main/java/br/com/cadastroempregados/App.java src/main/java/br/com/cadastroempregados/modelo/Empregado.java src/main/java/br/com/cadastroempregados/persistencia/EmpregadoRepository.java src/main/java/br/com/cadastroempregados/persistencia/EmpregadoRepositoryMemoria.java src/main/java/br/com/cadastroempregados/aplicacao/EmpregadoService.java src/main/java/br/com/cadastroempregados/ui/EmpregadoFrame.java
-java -cp target/classes br.com.cadastroempregados.App
-```
-
-No VS Code, tambem e possivel executar pelo menu `Terminal > Run Task...` e selecionar a tarefa `Executar`.
-
-## Proximo passo
-
-Na proxima etapa, poderemos melhorar a organizacao do tutorial e preparar a camada de persistencia para ser substituida por uma implementacao JDBC usando o banco de dados no Aiven.
-
-## Segunda Versão: persistencia com PostgreSQL no Aiven
-
-Agora estamos iniciando a segunda parte do projeto. O objetivo desta etapa e substituir a persistencia em memoria, feita com `ArrayList`, por persistencia em banco de dados PostgreSQL no Aiven.
-
-A interface, o modelo e a classe de aplicacao continuam com a mesma responsabilidade. A mudanca principal acontece na camada de persistencia: em vez de guardar os empregados em uma lista, vamos inserir e consultar os dados na tabela `empregado` usando JDBC.
-
-## Biblioteca necessaria
-
-Como o projeto nao usa Maven nem Gradle, precisamos acrescentar manualmente apenas a biblioteca estritamente necessaria:
-
-- driver JDBC do PostgreSQL.
-
-Crie uma pasta chamada `lib` na raiz do projeto e coloque nela o arquivo `.jar` do driver PostgreSQL. Nesta versao, usamos este arquivo:
-
-```text
-https://jdbc.postgresql.org/download/postgresql-42.7.11.jar
-```
-
-Com isso, os comandos de compilacao e execucao passam a incluir `lib/*` no classpath.
-
-## Configuracao do acesso ao banco
-
-Nao vamos gravar URL, usuario ou senha diretamente no codigo. Essas informacoes devem ficar em um arquivo local chamado `.env`.
-
-O projeto possui um arquivo modelo chamado `.env.example`:
+O arquivo `.env.example` possui este formato:
 
 ```text
 APP_DB_URL=jdbc:postgresql://HOST:PORTA/NOME_DO_BANCO?sslmode=require
@@ -130,15 +71,15 @@ APP_DB_USUARIO=USUARIO
 APP_DB_SENHA=SENHA
 ```
 
-Cada aluno deve copiar esse arquivo para um novo arquivo chamado `.env` e trocar os placeholders pelos dados reais do seu banco.
+Crie uma copia chamada `.env` e substitua os valores pelos dados reais do seu banco.
 
-No Aiven, o service URI costuma vir neste formato:
+No Aiven, a URI do servico costuma aparecer neste formato:
 
 ```text
 postgres://USUARIO:SENHA@HOST:PORTA/NOME_DO_BANCO?sslmode=require
 ```
 
-Para usar com JDBC, separamos as informacoes e montamos a URL neste formato:
+Para usar com JDBC, separe as partes e monte o `.env` assim:
 
 ```text
 APP_DB_URL=jdbc:postgresql://HOST:PORTA/NOME_DO_BANCO?sslmode=require
@@ -146,19 +87,11 @@ APP_DB_USUARIO=USUARIO
 APP_DB_SENHA=SENHA
 ```
 
-Exemplo generico do arquivo `.env`:
+O arquivo `.env` contem dados sensiveis e nao deve ser enviado para o Git. Por isso ele esta listado no `.gitignore`. Apenas o `.env.example`, com valores ficticios, deve ser versionado.
 
-```text
-APP_DB_URL=jdbc:postgresql://HOST:PORTA/NOME_DO_BANCO?sslmode=require
-APP_DB_USUARIO=USUARIO
-APP_DB_SENHA=SENHA
-```
+## Conexao com JDBC
 
-O arquivo `.env` possui dados sensiveis e nao deve ser enviado para o Git. Por isso ele fica listado no `.gitignore`. Somente o `.env.example`, com dados ficticios, deve ser versionado.
-
-## Estabelecendo a conexao
-
-A classe `ConexaoFactory`, na camada de persistencia, fica responsavel por ler o arquivo `.env` e abrir a conexao:
+A classe `ConexaoFactory` le o arquivo `.env` e abre a conexao com o banco:
 
 ```java
 public Connection conectar() {
@@ -171,11 +104,29 @@ public Connection conectar() {
 }
 ```
 
-Antes disso, a propria `ConexaoFactory` carrega o `.env`, lendo linhas no formato `CHAVE=VALOR`. Assim, as demais classes nao precisam saber de onde vieram a URL, o usuario e a senha.
+Com isso, as outras classes nao precisam saber como as configuracoes foram carregadas. Elas apenas pedem uma conexao quando precisam executar comandos SQL.
 
-## Listando empregados pelo banco
+## Inserindo empregados
 
-Na nova classe `EmpregadoRepositoryPostgres`, o metodo `listar` consulta a tabela `empregado`:
+Na classe `EmpregadoRepositoryPostgres`, o metodo `inserir` grava um empregado na tabela:
+
+```java
+String sql = "insert into empregado (nome, cpf, salario) values (?, ?, ?)";
+
+try (Connection conexao = conexaoFactory.conectar();
+     PreparedStatement comando = conexao.prepareStatement(sql)) {
+    comando.setString(1, empregado.getNome());
+    comando.setString(2, empregado.getCpf());
+    comando.setBigDecimal(3, empregado.getSalario());
+    comando.executeUpdate();
+}
+```
+
+O `PreparedStatement` evita montar SQL por concatenacao de texto e ajuda a deixar o codigo mais seguro e organizado.
+
+## Listando empregados
+
+O metodo `listar` consulta os empregados cadastrados:
 
 ```java
 String sql = "select nome, cpf, salario from empregado order by nome";
@@ -194,42 +145,103 @@ try (Connection conexao = conexaoFactory.conectar();
 }
 ```
 
-O resultado do banco e transformado em objetos `Empregado`, que sao devolvidos para a aplicacao.
+Cada linha retornada pelo banco e transformada em um objeto `Empregado`.
 
-## Inserindo empregados no banco
+## Regras da aplicacao
 
-O metodo `inserir` usa `PreparedStatement` para enviar os dados ao PostgreSQL:
+A classe `EmpregadoService` recebe os dados vindos da interface e aplica as regras antes de salvar:
+
+- nome, CPF e salario sao obrigatorios;
+- salario precisa ser numerico;
+- salario nao pode ser negativo;
+- CPF nao pode ser duplicado.
+
+Somente depois dessas validacoes o empregado e enviado para o repositorio.
+
+## Interface por linha de comando
+
+A classe `EmpregadoConsole` e a interface principal deste projeto. Ela exibe um menu simples:
+
+```text
+=== Cadastro de Empregados ===
+1 - Listar empregados
+2 - Cadastrar novo empregado
+0 - Sair
+Escolha uma opcao:
+```
+
+Quando o usuario escolhe cadastrar, a interface pede nome, CPF e salario. Depois ela chama o `EmpregadoService`, que valida os dados e salva no banco.
+
+Quando o usuario escolhe listar, a interface chama o service, recebe os empregados cadastrados e mostra as informacoes no terminal.
+
+## Classe principal
+
+A classe `App` monta os objetos do sistema e inicia a interface de linha de comando:
 
 ```java
-String sql = "insert into empregado (nome, cpf, salario) values (?, ?, ?)";
-
-try (Connection conexao = conexaoFactory.conectar();
-     PreparedStatement comando = conexao.prepareStatement(sql)) {
-    comando.setString(1, empregado.getNome());
-    comando.setString(2, empregado.getCpf());
-    comando.setBigDecimal(3, empregado.getSalario());
-    comando.executeUpdate();
+public class App {
+    public static void main(String[] args) {
+        EmpregadoRepositoryPostgres repository = new EmpregadoRepositoryPostgres(new ConexaoFactory());
+        EmpregadoService service = new EmpregadoService(repository);
+        EmpregadoConsole console = new EmpregadoConsole(service);
+        console.iniciar();
+    }
 }
 ```
 
-O uso de `PreparedStatement` evita montar SQL por concatenacao de texto e deixa o codigo mais seguro e organizado.
+Essa montagem conecta as camadas:
 
-## Compilando e executando a segunda versão
+- `ConexaoFactory` abre conexoes com o banco.
+- `EmpregadoRepositoryPostgres` executa SQL.
+- `EmpregadoService` aplica as regras.
+- `EmpregadoConsole` conversa com o usuario pelo terminal.
 
-Para obter exatamente esta segunda versao do projeto, mesmo depois que o repositorio tiver novas versoes, use:
+## Compilando e executando
 
-```bash
-git clone https://github.com/victoriocarvalho/programaJavaBD.git
-cd programaJavaBD
-git checkout v2-persistenciaBD
-```
+Como o projeto nao usa Maven nem Gradle, o driver JDBC do PostgreSQL fica na pasta `lib`.
 
-Depois de criar o arquivo `.env` a partir do `.env.example`, ajustando os valores das variaveis, compile e execute:
+Depois de criar o arquivo `.env` e a tabela `empregado` no banco, compile o projeto:
 
 ```powershell
-javac -d target/classes -cp "lib/*" src/main/java/br/com/cadastroempregados/App.java src/main/java/br/com/cadastroempregados/modelo/Empregado.java src/main/java/br/com/cadastroempregados/persistencia/EmpregadoRepository.java src/main/java/br/com/cadastroempregados/persistencia/ConexaoFactory.java src/main/java/br/com/cadastroempregados/persistencia/EmpregadoRepositoryPostgres.java src/main/java/br/com/cadastroempregados/aplicacao/EmpregadoService.java src/main/java/br/com/cadastroempregados/ui/EmpregadoFrame.java
+javac -d target/classes -cp "lib/*" src/main/java/br/com/cadastroempregados/App.java src/main/java/br/com/cadastroempregados/modelo/Empregado.java src/main/java/br/com/cadastroempregados/persistencia/EmpregadoRepository.java src/main/java/br/com/cadastroempregados/persistencia/ConexaoFactory.java src/main/java/br/com/cadastroempregados/persistencia/EmpregadoRepositoryPostgres.java src/main/java/br/com/cadastroempregados/aplicacao/EmpregadoService.java src/main/java/br/com/cadastroempregados/ui/EmpregadoConsole.java src/main/java/br/com/cadastroempregados/ui/EmpregadoFrame.java
+```
 
+Execute a aplicacao:
+
+```powershell
 java -cp "target/classes;lib/*" br.com.cadastroempregados.App
 ```
 
-No VS Code, tambem e possivel executar pelo menu `Terminal > Run Task...` e selecionar a tarefa `Executar`.
+No Linux ou macOS, o separador do classpath e `:` em vez de `;`:
+
+```bash
+java -cp "target/classes:lib/*" br.com.cadastroempregados.App
+```
+
+## Usando a interface Swing
+
+O projeto tambem possui uma interface grafica simples em Swing, implementada pela classe `EmpregadoFrame`.
+
+Para usar Swing no lugar da linha de comando, altere a classe `App`.
+
+Troque:
+
+```java
+EmpregadoConsole console = new EmpregadoConsole(service);
+console.iniciar();
+```
+
+Por:
+
+```java
+EmpregadoFrame janela = new EmpregadoFrame(service);
+janela.setVisible(true);
+```
+
+Tambem confira os imports da classe `App`: se a interface de console nao for usada, o import de `EmpregadoConsole` pode ser removido. Se `EmpregadoFrame` ainda nao estiver importado, adicione:
+
+```java
+import br.com.cadastroempregados.ui.EmpregadoFrame;
+```
+
+Depois disso, compile e execute novamente. A aplicacao usara o mesmo banco de dados, as mesmas regras e a mesma camada de persistencia; apenas a interface do usuario sera diferente.
